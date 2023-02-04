@@ -109,7 +109,7 @@ Theorem aequiv_example:
     <{ X - X }>
     <{ 0 }>.
 Proof.
-  intros st. simpl. lia.
+  intros st. simpl. reflexivity.  
 Qed.
 
 Theorem bequiv_example:
@@ -175,7 +175,12 @@ Theorem skip_right : forall c,
     <{ c ; skip }>
     c.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. split.
+  - intros. inversion H. inversion H5. rewrite <- H8. apply H2.
+  - intros. apply E_Seq with (st').
+    + assumption.
+    + apply E_Skip. 
+Qed.
 (** [] *)
 
 (** Similarly, here is a simple equivalence that optimizes [if]
@@ -263,7 +268,14 @@ Theorem if_false : forall b c1 c2,
     <{ if b then c1 else c2 end }>
     c2.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros b c1 c2 Hb. split;intros H.
+  - inversion H. subst. 
+    + unfold bequiv in Hb. simpl in Hb. rewrite Hb in H5. discriminate.
+    + assumption.
+  - unfold bequiv in Hb. simpl in Hb. apply E_IfFalse.
+    + apply Hb.
+    + assumption.  
+Qed.
 (** [] *)
 
 (** **** Exercise: 3 stars, standard (swap_if_branches)
@@ -276,7 +288,22 @@ Theorem swap_if_branches : forall b c1 c2,
     <{ if b then c1 else c2 end }>
     <{ if ~ b then c2 else c1 end }>.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  split;intros.
+  - inversion H. subst.
+    + apply E_IfFalse.
+      * simpl. rewrite H5. reflexivity.
+      * assumption.
+    + subst. apply E_IfTrue.
+      * simpl. rewrite H5. reflexivity.
+      * assumption.
+  - inversion H;subst.
+    + simpl in H5. apply E_IfFalse. 
+      * destruct (beval st b) eqn:E. simpl in H5. discriminate. reflexivity.
+      * assumption.
+    + simpl in H5. apply E_IfTrue. 
+      * destruct (beval st b) eqn:E. simpl in H5. reflexivity. simpl in H5. discriminate.
+      * assumption.
+Qed.
 (** [] *)
 
 (** For [while] loops, we can give a similar pair of theorems.  A loop
@@ -379,7 +406,15 @@ Theorem while_true : forall b c,
     <{ while b do c end }>
     <{ while true do skip end }>.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros b c Hb. split;intros.
+  - apply (while_true_nonterm b c st st') in Hb.  apply Hb in H. destruct H.
+  - inversion H;subst.
+    + simpl in H4. discriminate H4.
+    + exfalso. apply (while_true_nonterm BTrue CSkip st st').
+      * unfold bequiv. simpl. reflexivity.
+      * assumption. 
+
+Qed.
 (** [] *)
 
 (** A more interesting fact about [while] commands is that any number
@@ -445,7 +480,17 @@ Theorem assign_aequiv : forall (X : string) (a : aexp),
   aequiv <{ X }> a ->
   cequiv <{ skip }> <{ X := a }>.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. split;intros Hb;inversion Hb;subst;clear Hb.
+  - unfold aequiv in H. simpl in H. assert (st' = t_update st' X (st' X)).
+    {rewrite t_update_same. reflexivity. }
+    rewrite H0 at 2. apply E_Asgn. symmetry. apply H.
+  - unfold aequiv in H. simpl in H. assert (He : st = t_update st X (aeval st a)).
+    {
+      rewrite  <- H. rewrite t_update_same. reflexivity.
+    }
+    rewrite <- He. apply E_Skip.
+  
+Qed.
 (** [] *)
 
 (** **** Exercise: 2 stars, standard (equiv_classes) *)
@@ -712,7 +757,25 @@ Theorem CIf_congruence : forall b b' c1 c1' c2 c2',
   cequiv <{ if b then c1 else c2 end }>
          <{ if b' then c1' else c2' end }>.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  assert (A: forall (b b' : bexp) (c1 c1' c2 c2' : com) (st st' : state),
+             bequiv b b' -> cequiv c1 c1' ->  cequiv c2 c2' -> 
+             st =[ if b then c1 else c2 end]=> st' ->
+             st =[ if b' then c1' else c2' end  ]=> st').
+  { unfold bequiv,cequiv. intros. remember <{if b then c1 else c2 end }> as cif eqn:Heqcif. induction H2;inversion Heqcif;subst.
+   - apply E_IfTrue. 
+    + rewrite <- H. assumption.
+    + apply H0 in H3. assumption.
+   - apply E_IfFalse.
+    + rewrite <- H. assumption.
+    + apply H1 in H3. assumption.
+  }
+  intros. split.
+  - apply A;assumption.
+  - apply A.
+    + apply sym_bequiv. assumption.
+    + apply sym_cequiv. assumption.   
+    + apply sym_cequiv. assumption.
+Qed.
 (** [] *)
 
 (** For example, here are two equivalent programs and a proof of their
