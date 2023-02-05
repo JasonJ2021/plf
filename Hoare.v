@@ -358,7 +358,8 @@ Theorem hoare_post_true : forall (P Q : Assertion) c,
   (forall st, Q st) ->
   {{P}} c {{Q}}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. unfold hoare_triple. intros. apply H.
+Qed.
 (** [] *)
 
 (** **** Exercise: 1 star, standard (hoare_pre_false) *)
@@ -370,7 +371,8 @@ Theorem hoare_pre_false : forall (P Q : Assertion) c,
   (forall st, ~ (P st)) ->
   {{P}} c {{Q}}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. unfold hoare_triple. intros. apply H in H1. destruct H1.
+Qed.
 (** [] *)
 
 (* ################################################################# *)
@@ -424,7 +426,7 @@ Theorem hoare_seq : forall P Q R c1 c2,
 Proof.
   unfold hoare_triple.
   intros P Q R c1 c2 H1 H2 st st' H12 Pre.
-  inversion H12; subst.
+  inversion H12;subst.
   eauto.
 Qed.
 
@@ -648,7 +650,8 @@ Example hoare_asgn_examples1 :
       X := 2 * X
     {{ X <= 10 }}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  exists ( (X <= 10)[X |-> 2*X] ) % assertion. apply hoare_asgn.
+Qed.
 (** [] *)
 
 (** **** Exercise: 2 stars, standard, optional (hoare_asgn_examples2) *)
@@ -657,7 +660,9 @@ Example hoare_asgn_examples2 :
     {{ P }}
       X := 3
     {{ 0 <=  X /\ X <= 5 }}.
-Proof. (* FILL IN HERE *) Admitted.
+Proof. (* FILL IN HERE *) 
+  exists ( (0 <= X /\ X <= 5 )[X |-> 3] ) %assertion. apply hoare_asgn.
+Qed.
 (** [] *)
 
 (** **** Exercise: 2 stars, standard, especially useful (hoare_asgn_wrong)
@@ -675,7 +680,7 @@ Proof. (* FILL IN HERE *) Admitted.
     The rule universally quantifies over the arithmetic expression
     [a], and your counterexample needs to exhibit an [a] for which
     the rule doesn't work.)
-
+  a = X + 1
 *)
 
 (* FILL IN HERE *)
@@ -703,6 +708,10 @@ Definition manual_grade_for_hoare_asgn_wrong : option (nat*string) := None.
 
     Prove that this rule is correct. *)
 
+(* Search (_ !-> _ X). *)
+Axiom functional_extensionality : forall {X Y: Type}
+                                    {f g : X -> Y},
+  (forall (x:X), f x = g x) -> f = g.
 Theorem hoare_asgn_fwd :
   forall m a P,
   {{fun st => P st /\ st X = m}}
@@ -710,7 +719,19 @@ Theorem hoare_asgn_fwd :
   {{fun st => P (X !-> m ; st)
            /\ st X = aeval (X !-> m ; st) a }}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  unfold hoare_triple. intros.
+  assert (H1 : (X !->m ; st') = (st)).
+  {
+    inversion H. subst. destruct H0 as [H1 H2].  apply functional_extensionality. intros. destruct (String.eqb_spec x X).
+    - rewrite e. unfold t_update. simpl. symmetry. assumption.
+    - unfold t_update. destruct (String.eqb_spec X x).
+      + symmetry in e. apply n in e. destruct e.
+      + reflexivity.  
+  }
+  rewrite H1. destruct H0 as [H2 H3]. split.
+  - assumption.
+  - inversion H;subst. unfold t_update. simpl. reflexivity.   
+Qed.
 (** [] *)
 
 (** **** Exercise: 2 stars, advanced, optional (hoare_asgn_fwd_exists)
