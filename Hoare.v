@@ -1086,14 +1086,20 @@ Example assn_sub_ex1' :
     X := 2 * X
   {{ X <= 10 }}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  eapply hoare_consequence_pre.
+  - apply hoare_asgn.
+  - assn_auto.
+Qed.
 
 Example assn_sub_ex2' :
   {{ 0 <= 3 /\ 3 <= 5 }}
     X := 3
   {{ 0 <= X /\ X <= 5 }}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  eapply hoare_consequence_pre.
+  - apply hoare_asgn.
+  - assn_auto.  
+Qed.
 
 (** [] *)
 
@@ -1158,8 +1164,15 @@ Example hoare_asgn_example4 :
 Proof.
   apply hoare_seq with (Q := (X = 1)%assertion).
   (* The annotation [%assertion] is needed here to help Coq parse correctly. *)
-  (* FILL IN HERE *) Admitted.
-(** [] *)
+  - eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    + assn_auto.
+  - eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    + assn_auto.
+Qed.
+
+  (** [] *)
 
 (** **** Exercise: 3 stars, standard (swap_exercise)
 
@@ -1174,15 +1187,22 @@ Proof.
     your proof will want to start at the end and work back to the
     beginning of your program.)  *)
 
-Definition swap_program : com
-  (* REPLACE THIS LINE WITH ":= _your_definition_ ." *). Admitted.
-
+Definition swap_program : com :=
+  <{(Z := X;X := Y);Y := Z}>.
+  
 Theorem swap_exercise :
   {{X <= Y}}
     swap_program
   {{Y <= X}}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  unfold swap_program. apply hoare_seq with (c1 := <{Z := X;X := Y}>) (c2 := <{Y := Z}>) (Q := (Z <= X)%assertion).
+  - eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    + assn_auto.
+  - apply hoare_seq with (Q := (Z <= Y) %assertion).
+    + eapply hoare_consequence_pre;try apply hoare_asgn;try assn_auto.
+    + eapply hoare_consequence_pre;try apply hoare_asgn;try assn_auto.
+Qed.
 (** [] *)
 
 (** **** Exercise: 4 stars, advanced (invalid_triple)
@@ -1336,7 +1356,7 @@ Proof.
     eapply hoare_consequence_pre.
     + apply hoare_asgn.
     + assn_auto. (* no progress *)
-      unfold "->>", assn_sub, t_update, bassn.
+      unfold "->>" , assn_sub, t_update, bassn.
       simpl. intros st [_ H]. apply eqb_eq in H.
       rewrite H. lia.
   - (* Else *)
@@ -1415,7 +1435,14 @@ Theorem if_minus_plus :
     end
   {{Y = X + Z}}.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  apply hoare_if.
+  - eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    + assn_auto''.
+  -eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    + assn_auto''.
+Qed.
 (** [] *)
 
 (* ----------------------------------------------------------------- *)
@@ -1500,6 +1527,8 @@ Inductive ceval : com -> state -> state -> Prop :=
       st  =[ c ]=> st' ->
       st' =[ while b do c end ]=> st'' ->
       st  =[ while b do c end ]=> st''
+  | E_IF1True : forall st b st' c , beval st b = true -> st =[ c ]=> st' -> st =[if1 b then c end]=> st'
+  | E_IF1False: forall st b  c , beval st b = false -> st =[if1 b then c end]=> st
 (* FILL IN HERE *)
 
 where "st '=[' c ']=>' st'" := (ceval c st st').
@@ -1511,11 +1540,18 @@ Hint Constructors ceval : core.
 
 Example if1true_test :
   empty_st =[ if1 X = 0 then X := 1 end ]=> (X !-> 1).
-Proof. (* FILL IN HERE *) Admitted.
+Proof. (* FILL IN HERE *) 
+  apply E_IF1True.
+  - simpl. reflexivity.
+  - apply E_Asgn. simpl. reflexivity. 
+Qed.
 
 Example if1false_test :
   (X !-> 2) =[ if1 X = 0 then X := 1 end ]=> (X !-> 2).
-Proof. (* FILL IN HERE *) Admitted.
+Proof. (* FILL IN HERE *)
+  apply E_IF1False.
+  simpl. reflexivity.
+Qed.
 
 (** [] *)
 
@@ -1586,6 +1622,7 @@ Proof.
   auto.
 Qed.
 
+
 (** **** Exercise: 2 stars, standard (hoare_if1_good) *)
 
 (** Use your [if1] rule to prove the following (valid) Hoare triple.
@@ -1593,6 +1630,18 @@ Qed.
     Hint: [assn_auto''] will once again get you most but not all the
     way to a completely automated proof.  You can finish manually, or
     tweak the tactic further. *)
+Theorem hoare_if1 : forall P Q (b :bexp) c , 
+  {{ P /\ b }} c {{Q}} ->
+  (P /\ ~b)%assertion ->> Q ->
+  {{P}} if1 b then c end {{Q}}.
+Proof.
+  intros P Q b c HFalse HTrue st st' HE HP. inversion HE;subst;eauto.
+Qed.
+
+Lemma eqbP : forall n m, reflect (n = m) (n =? m).
+Proof.
+  intros n m. apply iff_reflect. rewrite eqb_eq. reflexivity.
+Qed.
 
 Lemma hoare_if1_good :
   {{ X + Y = Z }}
@@ -1600,7 +1649,17 @@ Lemma hoare_if1_good :
       X := X + Y
     end
   {{ X = Z }}.
-Proof. (* FILL IN HERE *) Admitted.
+Proof. (* FILL IN HERE *) 
+  apply hoare_if1.
+  - eapply hoare_consequence_pre.
+    + apply hoare_asgn.
+    +  assn_auto''. 
+  - assn_auto''. destruct H as [H1 H2]. 
+  (* remember (st X) as x. remember (st Y) as y. destruct (eqbP y 0).    *)
+  destruct (eqbP (st Y) 0 ).
+    + rewrite e in H1. rewrite add_0_r in H1. assumption.
+    + simpl in H2. unfold not in H2. unfold not in n. rewrite <- H1. lia.
+Qed.
 (** [] *)
 
 End If1.
