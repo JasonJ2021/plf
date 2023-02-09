@@ -200,7 +200,13 @@ Hint Unfold stuck : core.
 Example some_term_is_stuck :
   exists t, stuck t.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  exists <{succ true}>. unfold stuck. split.
+  - unfold step_normal_form. unfold not. intros. destruct H as [t' H].
+    inversion H;subst. inversion H1.
+  - unfold not. intros. inversion H.
+    * inversion H0.
+    * inversion H0;subst. inversion H2.
+Qed.
 (** [] *)
 
 (** However, although values and normal forms are _not_ the same in
@@ -212,7 +218,20 @@ Proof.
 Lemma value_is_nf : forall t,
   value t -> step_normal_form t.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros t. induction t; intros Hval [t' H].
+  - inversion H.
+  - inversion H.
+  - inversion Hval. inversion H0. inversion H0.
+  - inversion H.
+  - inversion Hval.
+    * inversion H0.
+    * assert (value <{t}>). {
+      inversion H0. unfold value. right. assumption. 
+    }
+    inversion H0. subst. inversion H. subst. apply IHt. apply H1. exists t1'. assumption.
+  - inversion Hval;inversion H0.
+  - inversion Hval;inversion H0.
+  Qed.
 
 (** (Hint: You will reach a point in this proof where you need to
     use an induction to reason about a term that is known to be a
@@ -339,7 +358,8 @@ Example succ_hastype_nat__hastype_nat : forall t,
   |- <{succ t}> \in Nat ->
   |- t \in Nat.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. inversion H. subst. assumption.
+Qed.
 (** [] *)
 
 (* ----------------------------------------------------------------- *)
@@ -399,7 +419,25 @@ Proof.
     + (* t1 can take a step *)
       destruct H as [t1' H1].
       exists (<{ if t1' then t2 else t3 }>). auto.
-  (* FILL IN HERE *) Admitted.
+  - destruct IHHT as [H1 | H2].
+    + left. unfold value. right. apply nv_succ.  apply nat_canonical;assumption.
+    + right. destruct H2 as [t' H]. exists <{succ t'}>. apply ST_Succ. assumption.
+  -  destruct IHHT as [H1 | H2].
+    + apply nat_canonical in HT.
+      * destruct HT.
+        -- right. exists <{0}>. apply ST_Pred0.
+        -- right. exists t. apply ST_PredSucc. inversion H1. subst. assumption. assumption.
+      * assumption.
+    + right. destruct H2 as [t' H2]. exists <{pred t'}>. apply ST_Pred. assumption.
+  - destruct IHHT as [H1 | H2].
+    + apply nat_canonical in HT.
+      * destruct HT.
+        -- right. exists <{true}>. apply ST_Iszero0.
+        -- right. exists <{false}>. apply ST_IszeroSucc. assumption.
+      * assumption.
+    + right. destruct H2 as [t' H2]. exists <{iszero t'}>. apply ST_Iszero. assumption.
+Qed. 
+
 (** [] *)
 
 (** **** Exercise: 3 stars, advanced (finish_progress_informal)
@@ -468,8 +506,17 @@ Proof.
       + (* ST_IfFalse *) assumption.
       + (* ST_If *) apply T_If; try assumption.
         apply IHHT1; assumption.
-    (* FILL IN HERE *) Admitted.
-(** [] *)
+    - inversion HE;subst;clear HE. apply T_Succ. apply IHHT in H0. assumption.
+    - inversion HE;subst;clear HE.
+      + assumption.
+      + inversion HT. assumption.
+      + apply T_Pred. apply IHHT in H0. assumption.
+    - inversion HE;subst;clear HE.
+      + apply T_True.
+      + apply T_False.
+      + apply T_Iszero. apply IHHT in H0. assumption.
+Qed.
+        (** [] *)
 
 (** **** Exercise: 3 stars, advanced (finish_preservation_informal)
 
@@ -519,7 +566,27 @@ Theorem preservation' : forall t t' T,
   t --> t' ->
   |- t' \in T.
 Proof with eauto.
-  (* FILL IN HERE *) Admitted.
+  intros t t' T HT HE. generalize dependent T.
+  induction HE;
+         (* every case needs to introduce a couple of things *)
+         (* and we can deal with several impossible
+            cases all at once *)
+        intros T HT;
+            try solve_by_invert.
+  - inversion HT. subst. assumption.
+  - inversion HT. subst. assumption.
+  - apply T_If.
+    + inversion HT. subst.  apply IHHE in H2. assumption.
+    + inversion HT. subst. assumption.
+    + inversion HT. subst. assumption.
+  - inversion HT. subst. apply IHHE in H0. apply T_Succ. assumption.
+  - inversion HT. subst. assumption.
+  - inversion HT. subst. inversion H1. subst. assumption.
+  - inversion HT. subst. apply IHHE in H0. apply T_Pred. assumption.  
+  - inversion HT. subst. apply T_True.
+  - inversion HT. subst. apply T_False.
+  - inversion HT. subst. apply IHHE in H0. apply T_Iszero. assumption.
+  Qed.
 (** [] *)
 
 (** The preservation theorem is often called _subject reduction_,
@@ -542,10 +609,10 @@ Corollary soundness : forall t t' T,
   t -->* t' ->
   ~(stuck t').
 Proof.
-  intros t t' T HT P. induction P; intros [R S].
+  intros t t' T HT P. induction P;intros [R S].
   - apply progress in HT. destruct HT; auto.
   - apply IHP.
-    + apply preservation with (t := x); auto.
+    + apply preservation with ( t := x);assumption.
     + unfold stuck. split; auto.
 Qed.
 
@@ -561,6 +628,8 @@ Qed.
     not, give a counter-example.
 
     (* FILL IN HERE *)
+    For example , t = if true then 0 else false --> t' = 0 , 
+    However |- t' \in nat , t is ill-typed.
 *)
 
 Theorem subject_expansion:
@@ -568,7 +637,8 @@ Theorem subject_expansion:
   \/
   ~ (forall t t' T, t --> t' /\ |- t' \in T -> |- t \in T).
 Proof.
-  (* FILL IN HERE *) Admitted.
+  Admitted.  
+
 (** [] *)
 
 (** **** Exercise: 2 stars, standard (variation1)
@@ -585,11 +655,13 @@ Proof.
    counterexample.
       - Determinism of [step]
             (* FILL IN HERE *)
+            true ? 
       - Progress
-            (* FILL IN HERE *)
+            false ? 
+            for example |- Scc false \in bool , but Scc false is not a value nor exists a t where t' --> t
       - Preservation
-            (* FILL IN HERE *)
-*)
+            True
+      *)
 (* Do not modify the following line: *)
 Definition manual_grade_for_variation1 : option (nat*string) := None.
 (** [] *)
@@ -604,6 +676,10 @@ Definition manual_grade_for_variation1 : option (nat*string) := None.
    Which of the above properties become false in the presence of
    this rule?  For each one that does, give a counter-example.
             (* FILL IN HERE *)
+      - Determinism : false
+      - Progess : true
+      -  Preservation : true.
+    
 *)
 (* Do not modify the following line: *)
 Definition manual_grade_for_variation2 : option (nat*string) := None.
