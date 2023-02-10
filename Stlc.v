@@ -224,6 +224,8 @@ Notation k := <{\x:Bool, \y:Bool, x}>.
 
 Notation notB := <{\x:Bool, if x then false else true}>.
 
+Compute (fun x:bool => 3 + 4).
+Compute (fun x:bool => 7).
 (** (We write these as [Notation]s rather than [Definition]s to make
     things easier for [auto].) *)
 
@@ -459,15 +461,61 @@ Check <{[x:=true] x}>.
 Inductive substi (s : tm) (x : string) : tm -> tm -> Prop :=
   | s_var1 :
       substi s x (tm_var x) s
-  (* FILL IN HERE *)
-.
+  | s_var2 :
+      forall y:string , y <> x -> substi s x y y
+  | s_abs1 : forall (t : tm) T,
+      substi s x <{\x:T , t}> <{\x:T , t}>
+  | s_abs2 :
+    forall (y : string) (t1 t2 : tm) T , 
+    (String.eqb x y) = false -> 
+    substi s x t1 t2 -> substi s x <{\y:T , t1}> <{\y:T , t2}>
+  | s_app :
+    forall (t1 t2 t1' t2': tm) , substi s x t1 t1' -> substi s x t2 t2'
+    -> substi s x <{t1 t2}> <{t1' t2'}>
+  | s_true :
+    substi s x <{true}> <{true}> 
+  | s_false :
+    substi s x <{false}> <{false}>
+  | s_if : forall (t1 t2 t3 t1' t2' t3' : tm) , 
+    substi s x t1 t1' -> substi s x t2 t2' -> substi s x t3 t3' 
+    -> substi s x <{if t1 then t2 else t3}> <{if t1' then t2' else t3'}>
+      .
 
 Hint Constructors substi : core.
 
 Theorem substi_correct : forall s x t t',
   <{ [x:=s]t }> = t' <-> substi s x t t'.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros s x t t';split.
+  - generalize dependent t'. induction t.
+    + intros. simpl in H. destruct (String.eqb_spec x s0).
+      * rewrite <- H. rewrite <- e. apply s_var1.
+      * rewrite <- H. apply s_var2. unfold not. intros. unfold not in n. apply n. symmetry. assumption.
+    + intros.  simpl in H. rewrite <- H. apply s_app. 
+      * apply IHt1. reflexivity.
+      * apply IHt2. reflexivity.
+    + intros. simpl in H. destruct (String.eqb_spec x s0).
+      * rewrite <- H. rewrite <- e. apply s_abs1. 
+      * rewrite <- H. apply s_abs2. 
+        -- destruct (String.eqb_spec x s0). exfalso. apply n. assumption. reflexivity.
+        -- apply IHt. reflexivity.
+    + intros.  simpl in H. rewrite <- H. apply s_true. 
+    + intros. simpl in H. rewrite <- H. apply s_false.
+    + intros. simpl in H. rewrite <- H. apply s_if;try (apply IHt1);try (apply IHt2);try (apply IHt3);try reflexivity.
+  - intros. generalize dependent t'. induction t;intros t' H.
+    + unfold subst. destruct (String.eqb_spec x s0).
+      * inversion H. reflexivity. symmetry in e. apply H1 in e. destruct e.
+      * inversion H. apply n in H1. destruct H1. reflexivity.
+    + inversion H;subst. apply IHt1 in H2. apply IHt2 in H4. rewrite <- H2. rewrite <- H4. simpl. reflexivity.
+    + simpl. destruct (String.eqb_spec x s0).
+      * inversion H;subst. reflexivity. destruct (String.eqb_spec s0 s0). discriminate. unfold not in n. exfalso. apply n. reflexivity.
+      * inversion H;subst.
+        -- destruct n. reflexivity.
+        -- apply IHt in H5. rewrite <- H5. reflexivity.
+    + inversion H. simpl. reflexivity.
+    + inversion H. simpl. reflexivity.
+    + inversion H;subst. simpl. apply IHt1 in H3. apply IHt2 in H5. apply IHt3 in H6. rewrite H3.  rewrite H5. rewrite H6. reflexivity.   
+Qed.
 (** [] *)
 
 (* ================================================================= *)
@@ -660,13 +708,20 @@ Lemma step_example5 :
        <{idBBBB idBB idB}>
   -->* idB.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  normalize.
+Qed.
 
 Lemma step_example5_with_normalize :
        <{idBBBB idBB idB}>
   -->* idB.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  eapply multi_step.
+  - apply ST_App1. apply ST_AppAbs. apply v_abs.
+  - eapply multi_step.
+    + simpl. apply ST_AppAbs. apply v_abs.
+    + simpl. apply multi_refl.
+  
+Qed.
 (** [] *)
 
 (* ################################################################# *)
@@ -786,7 +841,9 @@ Proof. eauto 20. Qed.
 
     Prove the same result without using [auto], [eauto], or
     [eapply] (or [...]). *)
-
+Axiom functional_extensionality : forall {X Y: Type}
+                                    {f g : X -> Y},
+  (forall (x:X), f x = g x) -> f = g.
 Example typing_example_2_full :
   empty |-
     \x:Bool,
@@ -794,7 +851,11 @@ Example typing_example_2_full :
           (y (y x)) \in
     (Bool -> (Bool -> Bool) -> Bool).
 Proof.
-  (* FILL IN HERE *) Admitted.
+  apply  T_Abs. apply T_Abs. apply T_App with (T2 := <{Bool}>).
+  - apply T_Var. reflexivity. 
+  - apply T_App with (T2 := <{Bool}>). apply T_Var. reflexivity. apply T_Var. reflexivity.
+
+Qed.
 (** [] *)
 
 (** **** Exercise: 2 stars, standard (typing_example_3)
@@ -816,7 +877,13 @@ Example typing_example_3 :
                (y (x z)) \in
       T.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  exists <{((Bool -> Bool) -> (Bool -> Bool) -> Bool -> Bool)}>.
+  apply T_Abs. apply T_Abs. apply T_Abs. apply T_App with (T2 := <{Bool}>).
+  - apply T_Var. reflexivity.
+  - apply T_App with (T2 := <{Bool}>). 
+    * apply T_Var. reflexivity.
+    * apply T_Var. reflexivity.
+Qed.
 (** [] *)
 
 (** We can also show that some terms are _not_ typable.  For example,
