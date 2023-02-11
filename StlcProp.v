@@ -145,8 +145,25 @@ Theorem progress' : forall t T,
 Proof.
   intros t.
   induction t; intros T Ht; auto.
-  (* FILL IN HERE *) Admitted.
-(** [] *)
+  - (*Var cannot be well typed in empty context*)
+    inversion Ht. subst. discriminate H1.
+  - right. inversion Ht. clear Ht. subst. apply IHt1 in H2 as H3. destruct H3 as [H3 | H3].
+    + apply IHt2 in H4 as H5. destruct H5 as [H5 | H5].
+      * apply canonical_forms_fun in H2.
+        -- destruct H2 as [x [u H2]]. exists ( <{[x := t2] u}>).
+          rewrite H2. apply ST_AppAbs. assumption.
+        -- assumption.
+      * destruct H5 as [t' H5]. exists <{t1 t'}>. apply ST_App2;assumption.
+    + destruct H3 as [t' H3]. exists <{t' t2}>. apply ST_App1. assumption.
+  - right. inversion Ht. subst. apply IHt1 in H3 as H4. destruct H4 as [H4 | H4].
+    + apply canonical_forms_bool in H3. destruct H3 as [H3 | H3].
+      * rewrite H3. exists <{t2}>. apply ST_IfTrue.
+      * rewrite H3. exists <{t3}>. apply ST_IfFalse.
+      * assumption.
+    + destruct H4 as [t' H4] . exists <{ if t' then t2 else t3}>. apply ST_If. assumption.
+Qed.
+
+  (** [] *)
 
 (* ################################################################# *)
 (** * Preservation *)
@@ -333,7 +350,18 @@ Proof.
   remember (x |-> U; Gamma) as Gamma'.
   generalize dependent Gamma.
   induction Ht; intros Gamma' G; simpl; eauto.
- (* FILL IN HERE *) Admitted.
+  - destruct (String.eqb_spec x x0).
+    + rewrite <- e in H. rewrite G in H. rewrite update_eq in H. 
+    injection H as H1. rewrite <- H1. apply weakening_empty. assumption.
+    + rewrite G in H. rewrite update_neq in H. 
+      * apply T_Var. assumption.
+      * assumption.
+  - destruct (String.eqb_spec x x0).
+    + apply T_Abs. rewrite G in Ht. rewrite e in Ht. remember (x0 |-> T2; x0 |-> U; Gamma') as Gamma''. rewrite -> update_shadow in HeqGamma''.
+      rewrite HeqGamma'' in Ht. assumption.
+    + apply T_Abs. apply IHHt. rewrite G. apply update_permute. assumption.
+Qed. 
+
 (** [] *)
 
 (* ================================================================= *)
@@ -347,7 +375,7 @@ Proof.
 Theorem preservation : forall t t' T,
   empty |- t \in T  ->
   t --> t'  ->
-  empty |- t' \in T.
+empty |- t' \in T.
 
 (** _Proof_: By induction on the derivation of [|- t \in T].
 
@@ -463,7 +491,14 @@ Theorem unique_types : forall Gamma e T T',
   Gamma |- e \in T' ->
   T = T'.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros. generalize dependent T'. induction H;subst.
+  - inversion H. subst. intros. inversion H0. subst. rewrite H4 in H. inversion H. reflexivity.
+  - intros. inversion H0. subst. apply IHhas_type in H6. rewrite H6. reflexivity.
+  - intros. inversion H1. subst. apply IHhas_type1 in H5. apply IHhas_type2 in H7. rewrite H7 in H5. inversion H5. reflexivity.
+  - intros. inversion H0;subst. reflexivity.
+  - intros. inversion H0;subst. reflexivity.
+  - intros. inversion H2;subst. apply IHhas_type3 in H10. assumption. 
+Qed.
 (** [] *)
 
 (* ################################################################# *)
