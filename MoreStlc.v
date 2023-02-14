@@ -1139,7 +1139,10 @@ Fixpoint subst (x : string) (s : tm) (t : tm) : tm :=
   | <{t0.snd}> => <{([x:=s]t0).snd}>
   (* FILL IN HERE *)
   (* let *)
-  | <{let t0  = t1 in t2}> => <{let t0 = [x:=s]t1 in [x:=s]t2}>
+  | <{let y  = t1 in t2}> => 
+    if eqb x y 
+    then <{let y = [x:=s]t1 in t2}>
+    else <{let y = [x:=s]t1 in [x:=s]t2}>
   (* FILL IN HERE *)
   (* fix *)
   | <{fix t0}> => <{fix [x:=s]t0}>
@@ -1272,14 +1275,14 @@ Inductive step : tm -> tm -> Prop :=
       t1 --> t1' -> <{(t1 , t2)}> --> <{(t1' , t2)}>
   | ST_Pair2 : forall v1 t2 t2' , 
       value v1 -> t2 --> t2' -> <{(v1 , t2)}> --> <{(v1 , t2')}>
-  | ST_Fst1 : forall t1 t1' ,
+  | ST_Fst1 : forall t1 t1' , t1 --> t1' -> 
       <{t1.fst}> --> <{t1'.fst}>
-  | ST_FstPair : forall v1 v2 , 
-      value v1 -> value v2 -> <{(v1,v2).fst}> --> v1
-  | ST_Snd1 : forall t1 t1' ,
+  | ST_FstPair : forall v1 v2 , value v1 -> value v2 -> 
+      <{(v1,v2).fst}> --> v1
+  | ST_Snd1 : forall t1 t1' , t1 --> t1' ->  
       <{t1.snd}> --> <{t1'.snd}>
-  | ST_SndPair : forall v1 v2,
-      value v1 -> value v2 -> <{(v1 , v2).snd}> --> v2
+  | ST_SndPair : forall v1 v2, value v1 -> value v2 -> 
+      <{(v1 , v2).snd}> --> v2
   (* let *)
   (* FILL IN HERE *)
   | ST_Let1 : forall t1 t1' x t2  , 
@@ -1376,12 +1379,12 @@ Inductive has_type : context -> tm -> ty -> Prop :=
   (* pairs *)
   (* FILL IN HERE *)
   | T_Pair : forall Gamma t1 T1 t2 T2 ,
-    Gamma |- t1 \in T1 -> Gamma |- t2 \in T2 -> Gamma |- <{(t1 , t2)}> \in (T1 * T2)
+    Gamma |- t1 \in T1 -> Gamma |- t2 \in T2 -> Gamma |- (t1 , t2) \in (T1 * T2)
   
   | T_Fst : forall Gamma t0 T1 T2 , Gamma |- t0 \in (T1 * T2) ->
-    Gamma |- <{t0.fst}> \in T1
+    Gamma |- t0.fst \in T1
   | T_Snd : forall Gamma t0 T1 T2 , Gamma |- t0 \in (T1 * T2) -> 
-    Gamma |- <{t0.snd}> \in T2
+    Gamma |- t0.snd \in T2
   (* let *)
   (* FILL IN HERE *)
   | T_Let : forall Gamma x t1 T1 t2 T2 ,
@@ -1516,11 +1519,12 @@ Qed.
 Example reduces :
   tm_test -->* 6.
 Proof.
-  unfold tm_test. apply multi_step with (y := <{(5,6).snd}>).
+  (* unfold tm_test. apply multi_step with (y := <{(5,6).snd}>).
   - apply ST_Snd1.
   - eapply multi_step.
     + apply ST_SndPair;apply v_nat.
-    + apply multi_refl.
+    + apply multi_refl. *)
+  unfold tm_test. normalize.
 Qed.
 
 
@@ -1949,11 +1953,38 @@ Proof with eauto.
 
   (* pairs *)
   (* FILL IN HERE *)
+  - destruct IHHt1...
+    + destruct IHHt2... right. destruct H0 as [t' H0]. exists <{(t1 , t')}>. apply ST_Pair2; assumption.
+    + destruct IHHt2... 
+      * right. destruct H; try solve_by_invert. exists <{(x0 , t2)}>. apply ST_Pair1. assumption.
+      * right. destruct H. exists <{(x0 , t2)}>. apply ST_Pair1. assumption.
+  - (*T_Fst*)  
+    destruct IHHt. 
+    + reflexivity.
+    + right. inversion Ht;subst;try solve_by_invert. exists <{<{t1}>}>. apply ST_FstPair;inversion H;assumption.
+    + right. destruct H as [ t' H]. exists <{t'.fst}>. apply ST_Fst1. assumption.   
+  - (*T_snd*)
+    destruct IHHt.
+    + reflexivity.
+    + right. inversion Ht;subst;try solve_by_invert. exists <{<{t2}>}>. apply ST_SndPair;inversion H;assumption.
+    + right. destruct H as [ t' H]. exists <{t'.snd}>. apply ST_Snd1. assumption.   
   (* let *)
   (* FILL IN HERE *)
+  - (*T_Let*)
+   destruct IHHt1.
+    + reflexivity.
+    + right. exists <{[x0:=t1]t2}>. apply ST_LetValue. assumption.
+    + right. destruct H as [t' H]. exists <{let x0 = t' in t2}>. apply ST_Let1. assumption.
+
   (* fix *)
   (* FILL IN HERE *)
-(* FILL IN HERE *) Admitted.
+  - (*T_Fix*)
+    destruct IHHt.
+    + reflexivity.
+    + right. inversion Ht;subst;try solve_by_invert. exists <{ [x0:= fix (\x0:T1,t0)]t0}>.
+      apply ST_FixAbs.
+    + right. destruct H as [t' H]. exists <{fix t'}>. apply ST_Fix1. assumption.
+Qed.
 
 (** [] *)
 
@@ -2062,11 +2093,12 @@ Proof with eauto.
         apply IHt3.
         rewrite (update_permute _ _ _ _ _ _ n0) in H9.
         rewrite (update_permute _ _ _ _ _ _ n) in H9.
-        assumption.
-
+        assumption. 
+  - rename s into y. destruct (eqb_spec x y );subst.
+    + eapply T_Let... rewrite update_shadow in H6. assumption.
+    + apply T_Let with (T1 := T1)... apply IHt2. rewrite update_permute...
   (* Complete the proof. *)
-
-  (* FILL IN HERE *) Admitted.
+Qed.
 
 (** [] *)
 
@@ -2111,13 +2143,18 @@ Proof with eauto.
   (* Complete the proof. *)
 
   (* fst and snd *)
+  -  inversion HT;subst. assumption.
+  - inversion HT;subst. assumption.
   (* FILL IN HERE *)
   (* let *)
+  - inversion HE;subst. 
+    + rewrite H4. eapply substitution_preserves_typing...
+    + eapply substitution_preserves_typing... 
   (* FILL IN HERE *)
   (* fix *)
+  - inversion HT;subst. eapply substitution_preserves_typing...
   (* FILL IN HERE *)
-(* FILL IN HERE *) Admitted.
-
+Qed.
 (** [] *)
 
 End STLCExtended.
